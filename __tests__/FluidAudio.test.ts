@@ -196,7 +196,7 @@ describe('FluidAudio', () => {
       const segments = vad.getSpeechSegments(mockResult);
 
       expect(segments.length).toBe(1);
-      expect(segments[0].start).toBe(0);
+      expect(segments[0]!.start).toBe(0);
     });
   });
 

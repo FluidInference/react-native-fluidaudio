@@ -1,8 +1,6 @@
 import type { TurboModule } from 'react-native';
 import { TurboModuleRegistry } from 'react-native';
 
-// Simplified Codegen spec - legacy bridge methods only
-// ArrayBuffer methods are handled via JSI bindings separately
 export interface Spec extends TurboModule {
   // System Info
   getSystemInfo(): Promise<{
