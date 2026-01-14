@@ -41,6 +41,43 @@ jobs:
           files: ./coverage/lcov.info
           fail_ci_if_error: false
 
+  # Build iOS example app
+  build-ios:
+    name: Build iOS
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install example dependencies
+        run: cd example && npm install
+
+      - name: Install CocoaPods
+        run: gem install cocoapods
+
+      - name: Pod install
+        run: cd example/ios && pod install
+
+      - name: Build iOS
+        run: |
+          xcodebuild \
+            -workspace example/ios/FluidAudioExample.xcworkspace \
+            -scheme FluidAudioExample \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 15 Pro' \
+            build \
+            CODE_SIGNING_ALLOWED=NO
+
   # Lint check
   lint:
     name: Lint
