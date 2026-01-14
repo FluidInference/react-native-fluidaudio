@@ -4,9 +4,8 @@ export const NativeModules = {
   FluidAudioModule: {
     getSystemInfo: jest.fn().mockResolvedValue({
       isAppleSilicon: true,
-      isIntelMac: false,
       platform: 'ios',
-      summary: 'Mock Apple Silicon Device',
+      summary: 'Mock iOS Device',
     }),
     initializeAsr: jest.fn().mockResolvedValue({
       success: true,

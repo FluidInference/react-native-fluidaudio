@@ -8,8 +8,7 @@
 
 export interface SystemInfo {
   isAppleSilicon: boolean;
-  isIntelMac: boolean;
-  platform: 'ios' | 'macos' | 'unknown';
+  platform: 'ios';
   summary: string;
 }
 

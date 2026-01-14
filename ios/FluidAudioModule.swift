@@ -45,30 +45,9 @@ class FluidAudioModule: RCTEventEmitter {
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
-        // Check architecture at compile time
-        #if arch(arm64)
-        let isAppleSilicon = true
-        let isIntelMac = false
-        #elseif arch(x86_64)
-        let isAppleSilicon = false
-        let isIntelMac = true
-        #else
-        let isAppleSilicon = false
-        let isIntelMac = false
-        #endif
-
         let info: [String: Any] = [
-            "isAppleSilicon": isAppleSilicon,
-            "isIntelMac": isIntelMac,
-            "platform": {
-                #if os(iOS)
-                return "ios"
-                #elseif os(macOS)
-                return "macos"
-                #else
-                return "unknown"
-                #endif
-            }(),
+            "isAppleSilicon": true, // All iOS devices are ARM64
+            "platform": "ios",
             "summary": SystemInfo.summary()
         ]
         resolve(info)

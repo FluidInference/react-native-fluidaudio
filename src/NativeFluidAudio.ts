@@ -5,7 +5,6 @@ export interface Spec extends TurboModule {
   // System Info
   getSystemInfo(): Promise<{
     isAppleSilicon: boolean;
-    isIntelMac: boolean;
     platform: string;
     summary: string;
   }>;
