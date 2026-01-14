@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+lib/
+build/
+*.xcworkspace
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/
+DerivedData/
+
+# FluidAudio build artifacts
+FluidAudio/.build/
+FluidAudio/.swiftpm/
+FluidAudio/Datasets/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+
+# Environment
+.env
+.env.*
+
+# Turborepo
+.turbo/
+
+# CocoaPods
+Pods/
+Podfile.lock

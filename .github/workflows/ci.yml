@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # TypeScript type checking and Jest tests
+  test-js:
+    name: TypeScript & Jest Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typescript
+
+      - name: Run tests
+        run: npm run test -- --coverage --ci
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: ./coverage/lcov.info
+          fail_ci_if_error: false
+
+  # Build iOS native module
+  build-ios:
+    name: Build iOS
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check Xcode version
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Build FluidAudio Swift Package
+        run: |
+          cd FluidAudio
+          swift build
+
+      - name: Build iOS module (simulator)
+        run: |
+          xcodebuild -scheme FluidAudioModule \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -derivedDataPath build \
+            build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO
+        working-directory: ios
+        continue-on-error: true
+
+  # Run FluidAudio Swift tests
+  test-swift:
+    name: FluidAudio Swift Tests
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check versions
+        run: |
+          swift --version
+          xcodebuild -version
+
+      - name: Build FluidAudio
+        run: swift build
+        working-directory: FluidAudio
+
+      - name: Run Swift tests
+        run: swift test --parallel
+        working-directory: FluidAudio
+        timeout-minutes: 10
+
+  # Lint check
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+        continue-on-error: true
