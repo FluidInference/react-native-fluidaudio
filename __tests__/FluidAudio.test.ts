@@ -18,7 +18,6 @@ describe('FluidAudio', () => {
       const info = await getSystemInfo();
 
       expect(info.isAppleSilicon).toBe(true);
-      expect(info.isIntelMac).toBe(false);
       expect(info.platform).toBe('ios');
       expect(mockModule.getSystemInfo).toHaveBeenCalledTimes(1);
     });

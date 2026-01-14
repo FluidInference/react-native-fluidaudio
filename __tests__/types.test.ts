@@ -20,7 +20,6 @@ describe('Type Definitions', () => {
     it('should have correct shape', () => {
       const info: SystemInfo = {
         isAppleSilicon: true,
-        isIntelMac: false,
         platform: 'ios',
         summary: 'Test device',
       };
