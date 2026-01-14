@@ -28,7 +28,7 @@ const LINKING_ERROR =
 // Try TurboModule first (New Architecture), fallback to legacy bridge
 const FluidAudioNative: FluidAudioNativeModule = (() => {
   // Check for TurboModule (New Architecture)
-  if (global.__turboModuleProxy) {
+  if ((global as any).__turboModuleProxy) {
     try {
       const turboModule = require('./NativeFluidAudio').default;
       if (turboModule) return turboModule;
@@ -66,7 +66,7 @@ function hasJSI(): boolean {
  * Check if using New Architecture (TurboModules)
  */
 export function isNewArchitecture(): boolean {
-  return !!global.__turboModuleProxy;
+  return !!(global as any).__turboModuleProxy;
 }
 
 /**
@@ -608,7 +608,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = '';
   for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
+    binary += String.fromCharCode(bytes[i]!);
   }
   return btoa(binary);
 }
