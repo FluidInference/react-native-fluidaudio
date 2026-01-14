@@ -25,56 +25,18 @@ const LINKING_ERROR =
   '- You rebuilt the app after installing the package\n' +
   '- You are not using Expo Go (Expo does not support native modules)\n';
 
-// Try TurboModule first (New Architecture), fallback to legacy bridge
-const FluidAudioNative: FluidAudioNativeModule = (() => {
-  // Check for TurboModule (New Architecture)
-  if ((global as any).__turboModuleProxy) {
-    try {
-      const turboModule = require('./NativeFluidAudio').default;
-      if (turboModule) return turboModule;
-    } catch {}
-  }
+const FluidAudioNative: FluidAudioNativeModule = NativeModules.FluidAudioModule
+  ? NativeModules.FluidAudioModule
+  : new Proxy(
+      {},
+      {
+        get() {
+          throw new Error(LINKING_ERROR);
+        },
+      }
+    );
 
-  // Fallback to legacy bridge
-  return NativeModules.FluidAudioModule
-    ? NativeModules.FluidAudioModule
-    : new Proxy(
-        {},
-        {
-          get() {
-            throw new Error(LINKING_ERROR);
-          },
-        }
-      );
-})();
-
-const eventEmitter = new NativeEventEmitter(
-  NativeModules.FluidAudioModule ?? FluidAudioNative
-);
-
-/**
- * Check if JSI bindings are available (New Architecture with zero-copy)
- */
-function hasJSI(): boolean {
-  return (
-    typeof global !== 'undefined' &&
-    typeof (global as any).FluidAudio_transcribeAudioBuffer === 'function'
-  );
-}
-
-/**
- * Check if using New Architecture (TurboModules)
- */
-export function isNewArchitecture(): boolean {
-  return !!(global as any).__turboModuleProxy;
-}
-
-/**
- * Check if zero-copy JSI is available
- */
-export function hasZeroCopySupport(): boolean {
-  return hasJSI();
-}
+const eventEmitter = new NativeEventEmitter(NativeModules.FluidAudioModule);
 
 // ============================================================================
 // Event Subscription Helpers
@@ -137,8 +99,6 @@ export async function isAppleSilicon(): Promise<boolean> {
 
 /**
  * ASR Manager for speech-to-text transcription
- *
- * Supports both legacy bridge (base64) and JSI (zero-copy ArrayBuffer)
  */
 export class ASRManager {
   private initialized = false;
@@ -163,26 +123,18 @@ export class ASRManager {
   }
 
   /**
-   * Transcribe audio from ArrayBuffer (zero-copy with JSI when available)
+   * Transcribe audio from ArrayBuffer
    * @param audioBuffer ArrayBuffer containing 16-bit PCM audio
    * @param sampleRate Sample rate of the audio (will be resampled to 16kHz)
    */
   async transcribeBuffer(audioBuffer: ArrayBuffer, sampleRate: number = 16000): Promise<ASRResult> {
     this.ensureInitialized();
-
-    if (hasJSI()) {
-      // Zero-copy path via JSI
-      return (global as any).FluidAudio_transcribeAudioBuffer(audioBuffer, sampleRate);
-    } else {
-      // Legacy path: convert to base64
-      const base64 = arrayBufferToBase64(audioBuffer);
-      return FluidAudioNative.transcribeAudioData(base64, sampleRate);
-    }
+    const base64 = arrayBufferToBase64(audioBuffer);
+    return FluidAudioNative.transcribeAudioData(base64, sampleRate);
   }
 
   /**
-   * Transcribe raw audio data (legacy base64 API)
-   * @deprecated Use transcribeBuffer() for better performance
+   * Transcribe raw audio data
    * @param base64Audio Base64-encoded 16-bit PCM audio
    * @param sampleRate Sample rate of the audio (will be resampled to 16kHz)
    */
@@ -211,8 +163,6 @@ export class ASRManager {
 
 /**
  * Streaming ASR Manager for real-time transcription
- *
- * Supports both legacy bridge (base64) and JSI (zero-copy ArrayBuffer)
  */
 export class StreamingASRManager {
   private streaming = false;
@@ -237,27 +187,19 @@ export class StreamingASRManager {
   }
 
   /**
-   * Feed audio data using ArrayBuffer (zero-copy with JSI when available)
+   * Feed audio data using ArrayBuffer
    * @param audioBuffer ArrayBuffer containing 16-bit PCM audio at 16kHz
    */
   async feedBuffer(audioBuffer: ArrayBuffer): Promise<void> {
     if (!this.streaming) {
       throw new Error('Streaming not started. Call start() first.');
     }
-
-    if (hasJSI()) {
-      // Zero-copy synchronous path via JSI
-      (global as any).FluidAudio_feedStreamingAudioBuffer(audioBuffer);
-    } else {
-      // Legacy path: convert to base64
-      const base64 = arrayBufferToBase64(audioBuffer);
-      await FluidAudioNative.feedStreamingAudio(base64);
-    }
+    const base64 = arrayBufferToBase64(audioBuffer);
+    await FluidAudioNative.feedStreamingAudio(base64);
   }
 
   /**
-   * Feed audio data (legacy base64 API)
-   * @deprecated Use feedBuffer() for better performance
+   * Feed audio data
    * @param base64Audio Base64-encoded 16-bit PCM audio at 16kHz
    */
   async feedAudio(base64Audio: string): Promise<void> {
@@ -293,8 +235,6 @@ export class StreamingASRManager {
 
 /**
  * VAD Manager for voice activity detection
- *
- * Supports both legacy bridge (base64) and JSI (zero-copy ArrayBuffer)
  */
 export class VADManager {
   private initialized = false;
@@ -317,23 +257,17 @@ export class VADManager {
   }
 
   /**
-   * Process audio buffer for voice activity (zero-copy with JSI when available)
+   * Process audio buffer for voice activity
    * @param audioBuffer ArrayBuffer containing 16-bit PCM audio at 16kHz
    */
   async processBuffer(audioBuffer: ArrayBuffer): Promise<VADResult> {
     this.ensureInitialized();
-
-    if (hasJSI()) {
-      return (global as any).FluidAudio_processVadBuffer(audioBuffer);
-    } else {
-      const base64 = arrayBufferToBase64(audioBuffer);
-      return FluidAudioNative.processVadAudioData(base64);
-    }
+    const base64 = arrayBufferToBase64(audioBuffer);
+    return FluidAudioNative.processVadAudioData(base64);
   }
 
   /**
-   * Process raw audio data for voice activity (legacy base64 API)
-   * @deprecated Use processBuffer() for better performance
+   * Process raw audio data for voice activity
    * @param base64Audio Base64-encoded 16-bit PCM audio at 16kHz
    */
   async process(base64Audio: string): Promise<VADResult> {
@@ -397,8 +331,6 @@ export class VADManager {
 
 /**
  * Diarization Manager for speaker identification
- *
- * Supports both legacy bridge (base64) and JSI (zero-copy ArrayBuffer)
  */
 export class DiarizationManager {
   private initialized = false;
@@ -423,24 +355,18 @@ export class DiarizationManager {
   }
 
   /**
-   * Diarize audio buffer (zero-copy with JSI when available)
+   * Diarize audio buffer
    * @param audioBuffer ArrayBuffer containing 16-bit PCM audio
    * @param sampleRate Sample rate of the audio (will be resampled to 16kHz)
    */
   async diarizeBuffer(audioBuffer: ArrayBuffer, sampleRate: number = 16000): Promise<DiarizationResult> {
     this.ensureInitialized();
-
-    if (hasJSI()) {
-      return (global as any).FluidAudio_performDiarizationBuffer(audioBuffer, sampleRate);
-    } else {
-      const base64 = arrayBufferToBase64(audioBuffer);
-      return FluidAudioNative.performDiarizationOnAudioData(base64, sampleRate);
-    }
+    const base64 = arrayBufferToBase64(audioBuffer);
+    return FluidAudioNative.performDiarizationOnAudioData(base64, sampleRate);
   }
 
   /**
-   * Perform speaker diarization on raw audio data (legacy base64 API)
-   * @deprecated Use diarizeBuffer() for better performance
+   * Perform speaker diarization on raw audio data
    * @param base64Audio Base64-encoded 16-bit PCM audio
    * @param sampleRate Sample rate of the audio (will be resampled to 16kHz)
    */
@@ -500,7 +426,7 @@ export class DiarizationManager {
 // ============================================================================
 
 /**
- * TTS Result with ArrayBuffer for New Architecture
+ * TTS Result with ArrayBuffer
  */
 export interface TTSBufferResult {
   audioBuffer: ArrayBuffer;
@@ -510,8 +436,6 @@ export interface TTSBufferResult {
 
 /**
  * TTS Manager for text-to-speech synthesis
- *
- * Supports both legacy bridge (base64) and JSI (zero-copy ArrayBuffer)
  * Note: TTS has a GPL dependency (ESpeakNG) - check license compatibility
  */
 export class TTSManager {
@@ -526,31 +450,23 @@ export class TTSManager {
   }
 
   /**
-   * Synthesize text to ArrayBuffer (zero-copy with JSI when available)
+   * Synthesize text to ArrayBuffer
    * @param text Text to synthesize
    * @param voice Voice ID to use (optional, uses recommended voice if not specified)
    * @returns Audio buffer with metadata
    */
   async synthesizeBuffer(text: string, voice?: string): Promise<TTSBufferResult> {
     this.ensureInitialized();
-
-    if (hasJSI()) {
-      // Zero-copy path: returns ArrayBuffer directly
-      return (global as any).FluidAudio_synthesize(text, voice ?? null);
-    } else {
-      // Legacy path: convert base64 to ArrayBuffer
-      const result = await FluidAudioNative.synthesize(text, voice);
-      return {
-        audioBuffer: base64ToArrayBuffer(result.audioData),
-        duration: result.duration,
-        sampleRate: result.sampleRate,
-      };
-    }
+    const result = await FluidAudioNative.synthesize(text, voice);
+    return {
+      audioBuffer: base64ToArrayBuffer(result.audioData),
+      duration: result.duration,
+      sampleRate: result.sampleRate,
+    };
   }
 
   /**
-   * Synthesize text to speech (legacy base64 API)
-   * @deprecated Use synthesizeBuffer() for better performance
+   * Synthesize text to speech
    * @param text Text to synthesize
    * @param voice Voice ID to use (optional, uses recommended voice if not specified)
    * @returns Audio data as base64 with metadata
@@ -602,7 +518,7 @@ export async function cleanup(): Promise<void> {
 // ============================================================================
 
 /**
- * Convert ArrayBuffer to base64 string (for legacy bridge fallback)
+ * Convert ArrayBuffer to base64 string
  */
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
@@ -633,8 +549,6 @@ const FluidAudio = {
   // System
   getSystemInfo,
   isAppleSilicon,
-  isNewArchitecture,
-  hasZeroCopySupport,
 
   // Managers
   ASRManager,

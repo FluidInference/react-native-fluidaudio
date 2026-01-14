@@ -4,8 +4,6 @@ export {
   // System
   getSystemInfo,
   isAppleSilicon,
-  isNewArchitecture,
-  hasZeroCopySupport,
   // Managers
   ASRManager,
   StreamingASRManager,
