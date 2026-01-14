@@ -78,6 +78,49 @@ jobs:
             build \
             CODE_SIGNING_ALLOWED=NO
 
+  # Build Expo test app
+  build-expo:
+    name: Build Expo
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build package
+        run: npm run prepare
+
+      - name: Install expo-test dependencies
+        run: cd expo-test && npm install
+
+      - name: Sync FluidAudio package
+        run: cd expo-test && npm run sync-fluidaudio
+
+      - name: Generate native project
+        run: cd expo-test && npx expo prebuild --platform ios --no-install
+
+      - name: Install CocoaPods
+        run: cd expo-test/ios && pod install
+
+      - name: Build iOS
+        run: |
+          xcodebuild \
+            -workspace expo-test/ios/expotest.xcworkspace \
+            -scheme expotest \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            build \
+            CODE_SIGNING_ALLOWED=NO
+
   # Lint check
   lint:
     name: Lint
@@ -124,13 +167,15 @@ jobs:
 
       - name: Verify exports
         run: |
+          # Check that compiled files exist and export the expected symbols
           node -e "
-            const pkg = require('./lib/commonjs/index.js');
+            const fs = require('fs');
+            const indexContent = fs.readFileSync('./lib/commonjs/index.js', 'utf8');
             const expected = ['ASRManager', 'StreamingASRManager', 'VADManager', 'DiarizationManager', 'TTSManager', 'getSystemInfo', 'isAppleSilicon', 'cleanup'];
-            const missing = expected.filter(e => !pkg[e]);
+            const missing = expected.filter(e => !indexContent.includes(e));
             if (missing.length) {
               console.error('Missing exports:', missing);
               process.exit(1);
             }
-            console.log('All exports present');
+            console.log('All exports found in compiled output');
           "

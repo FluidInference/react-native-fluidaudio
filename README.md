@@ -12,9 +12,8 @@ React Native wrapper for [FluidAudio](../FluidAudio) - a Swift library for ASR, 
 
 ## Requirements
 
-- iOS 17.0+ / macOS 14.0+
+- iOS 17.0+
 - React Native 0.71+
-- Apple Silicon (M1/M2/M3) - Intel Macs have limited support
 
 ## Installation
 
@@ -33,8 +32,6 @@ Then install pods:
 ```bash
 cd ios && pod install
 ```
-
-**Note:** Requires **arm64** architecture (Apple Silicon). Simulator builds only work on M1/M2/M3 Macs.
 
 ## Usage
 
@@ -150,17 +147,11 @@ await tts.synthesizeToFile('Hello, world!', '/path/to/output.wav');
 ### System Information
 
 ```typescript
-import { getSystemInfo, isAppleSilicon } from 'react-native-fluidaudio';
+import { getSystemInfo } from 'react-native-fluidaudio';
 
 const info = await getSystemInfo();
 console.log(info.summary);
-// e.g., "Apple M2 Pro, 16GB RAM, macOS 14.0"
-
-if (await isAppleSilicon()) {
-  // Full ML model support available
-} else {
-  // Intel Mac - some models may not work
-}
+// e.g., "Apple A17 Pro, iOS 17.0"
 ```
 
 ### Cleanup
@@ -196,66 +187,15 @@ await cleanup();
 
 See [src/types.ts](./src/types.ts) for complete TypeScript definitions.
 
-
 ## Notes
 
 ### Model Loading
 
 First initialization downloads and compiles ML models (~500MB total). This can take 20-30 seconds as Apple's Neural Engine compiles the models. Subsequent loads use cached compilations (~1 second).
 
-### Intel Mac Support
-
-Most ML models require Apple Silicon (ARM64). On Intel Macs:
-- VAD works with CPU fallback
-- ASR/Diarization may not work
-- Use `isAppleSilicon()` to check before initializing
-
 ### TTS License
 
 The TTS module uses ESpeakNG which is GPL licensed. Check license compatibility for your project.
-
-## Architecture
-
-This package supports both React Native architectures:
-
-### New Architecture (Recommended)
-- **TurboModules** for type-safe native module interface
-- **JSI (JavaScript Interface)** for zero-copy audio buffer transfer
-- **Codegen** for automatic type synchronization
-
-Enable New Architecture in your app:
-```bash
-# iOS
-cd ios && RCT_NEW_ARCH_ENABLED=1 pod install
-```
-
-### Legacy Architecture
-- Falls back to Bridge-based modules automatically
-- Audio data transferred as base64 strings
-- Fully functional, slightly higher latency for large audio
-
-### Zero-Copy API
-
-When New Architecture is enabled, use `ArrayBuffer` methods for best performance:
-
-```typescript
-import { ASRManager, hasZeroCopySupport } from 'react-native-fluidaudio';
-
-// Check if zero-copy is available
-if (hasZeroCopySupport()) {
-  console.log('Using JSI zero-copy audio transfer');
-}
-
-const asr = new ASRManager();
-await asr.initialize();
-
-// Zero-copy transcription (New Architecture)
-const audioBuffer = new ArrayBuffer(audioData.length);
-const result = await asr.transcribeBuffer(audioBuffer, 16000);
-
-// Legacy API still works (falls back automatically)
-const result2 = await asr.transcribe(base64Audio, 16000);
-```
 
 ## License
 
