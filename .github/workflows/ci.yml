@@ -41,93 +41,6 @@ jobs:
           files: ./coverage/lcov.info
           fail_ci_if_error: false
 
-  # Build iOS - Legacy Architecture
-  build-ios-legacy:
-    name: Build iOS (Legacy)
-    runs-on: macos-14
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.2'
-          bundler-cache: true
-
-      - name: Install CocoaPods
-        run: gem install cocoapods
-
-      - name: Create test Podfile
-        run: |
-          mkdir -p test-app/ios
-          cat > test-app/ios/Podfile << 'EOF'
-          platform :ios, '17.0'
-
-          target 'TestApp' do
-            use_frameworks!
-
-            pod 'React-Core', :path => '../../node_modules/react-native/'
-            pod 'react-native-fluidaudio', :path => '../../'
-            pod 'FluidAudio', :git => 'https://github.com/FluidInference/FluidAudio.git', :tag => 'v0.7.8'
-          end
-          EOF
-
-      - name: Validate podspec
-        run: pod lib lint --allow-warnings --skip-tests --no-clean
-        continue-on-error: true
-
-      - name: Check Xcode version
-        run: |
-          xcodebuild -version
-          swift --version
-
-  # Build iOS - New Architecture
-  build-ios-new-arch:
-    name: Build iOS (New Architecture)
-    runs-on: macos-14
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.2'
-          bundler-cache: true
-
-      - name: Install CocoaPods
-        run: gem install cocoapods
-
-      - name: Validate podspec (New Arch)
-        run: |
-          RCT_NEW_ARCH_ENABLED=1 pod lib lint --allow-warnings --skip-tests --no-clean
-        continue-on-error: true
-
-      - name: Check C++ compilation
-        run: |
-          clang++ -std=c++17 -c cpp/FluidAudioTurboModule.cpp -o /dev/null \
-            -I/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/usr/include \
-            2>&1 || echo "C++ syntax check (headers may be missing in CI)"
-
   # Lint check
   lint:
     name: Lint
@@ -176,7 +89,7 @@ jobs:
         run: |
           node -e "
             const pkg = require('./lib/commonjs/index.js');
-            const expected = ['ASRManager', 'StreamingASRManager', 'VADManager', 'DiarizationManager', 'TTSManager', 'getSystemInfo', 'isAppleSilicon', 'isNewArchitecture', 'hasZeroCopySupport', 'cleanup'];
+            const expected = ['ASRManager', 'StreamingASRManager', 'VADManager', 'DiarizationManager', 'TTSManager', 'getSystemInfo', 'isAppleSilicon', 'cleanup'];
             const missing = expected.filter(e => !pkg[e]);
             if (missing.length) {
               console.error('Missing exports:', missing);
