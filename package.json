@@ -36,7 +36,10 @@
     "prepare": "bob build",
     "release": "release-it",
     "build:ios": "cd ios && xcodebuild -scheme FluidAudioModule -destination 'generic/platform=iOS' build",
-    "validate": "npm run typescript && npm run test"
+    "validate": "npm run typescript && npm run test",
+    "example": "npm run --prefix example start",
+    "example:ios": "npm run --prefix example ios",
+    "example:install": "cd example && npm install && cd ios && pod install"
   },
   "keywords": [
     "react-native",
