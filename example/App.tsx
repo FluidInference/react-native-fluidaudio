@@ -1,8 +1,7 @@
 /**
- * Example React Native App using FluidAudio
+ * FluidAudio Demo App
  *
- * This is a reference implementation showing how to use
- * the react-native-fluidaudio package.
+ * Demonstrates ASR, Streaming ASR, VAD, Diarization, and TTS features
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -14,19 +13,21 @@ import {
   TouchableOpacity,
   View,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 
 import {
   FluidAudio,
   ASRManager,
+  StreamingASRManager,
   VADManager,
   DiarizationManager,
   TTSManager,
   onModelLoadProgress,
   cleanup,
   type SystemInfo,
-  type ASRResult,
   type ModelLoadProgressEvent,
+  type StreamingUpdate,
 } from 'react-native-fluidaudio';
 
 const App = () => {
@@ -34,12 +35,25 @@ const App = () => {
   const [loading, setLoading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState('');
   const [result, setResult] = useState<string>('');
+  const [ttsText, setTtsText] = useState('Hello from FluidAudio!');
+
+  // Streaming state
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingText, setStreamingText] = useState('');
+  const [confirmedText, setConfirmedText] = useState('');
 
   // Manager instances
   const [asr] = useState(() => new ASRManager());
+  const [streaming] = useState(() => new StreamingASRManager());
   const [vad] = useState(() => new VADManager());
   const [diarizer] = useState(() => new DiarizationManager());
   const [tts] = useState(() => new TTSManager());
+
+  // Initialization states
+  const [asrReady, setAsrReady] = useState(false);
+  const [vadReady, setVadReady] = useState(false);
+  const [diarizationReady, setDiarizationReady] = useState(false);
+  const [ttsReady, setTtsReady] = useState(false);
 
   // Load system info on mount
   useEffect(() => {
@@ -56,13 +70,17 @@ const App = () => {
     };
   }, []);
 
-  // Initialize ASR
+  // ============================================================================
+  // ASR Functions
+  // ============================================================================
+
   const initializeASR = useCallback(async () => {
     setLoading(true);
     setResult('');
     try {
       const initResult = await asr.initialize();
-      setResult(`ASR initialized in ${initResult.compilationDuration.toFixed(2)}s`);
+      setAsrReady(true);
+      setResult(`ASR initialized in ${initResult.compilationDuration.toFixed(2)}s\nReady for transcription!`);
     } catch (error) {
       setResult(`Error: ${(error as Error).message}`);
     } finally {
@@ -71,32 +89,57 @@ const App = () => {
     }
   }, [asr]);
 
-  // Transcribe a test file
-  const transcribeFile = useCallback(async () => {
+  // ============================================================================
+  // Streaming ASR Functions
+  // ============================================================================
+
+  const handleStreamingUpdate = useCallback((update: StreamingUpdate) => {
+    setStreamingText(update.volatile);
+    setConfirmedText(update.confirmed);
+  }, []);
+
+  const startStreaming = useCallback(async () => {
     setLoading(true);
+    setResult('');
+    setStreamingText('');
+    setConfirmedText('');
     try {
-      // In a real app, you'd get this from a file picker or recording
-      const filePath = '/path/to/your/audio.wav';
-      const transcription: ASRResult = await asr.transcribeFile(filePath);
-      setResult(
-        `Text: ${transcription.text}\n` +
-          `Confidence: ${(transcription.confidence * 100).toFixed(1)}%\n` +
-          `Speed: ${transcription.rtfx.toFixed(1)}x realtime`
-      );
+      await streaming.start({ source: 'microphone' }, handleStreamingUpdate);
+      setIsStreaming(true);
+      setResult('Streaming started - speak into the microphone!');
     } catch (error) {
       setResult(`Error: ${(error as Error).message}`);
     } finally {
       setLoading(false);
     }
-  }, [asr]);
+  }, [streaming, handleStreamingUpdate]);
 
-  // Initialize VAD
+  const stopStreaming = useCallback(async () => {
+    setLoading(true);
+    try {
+      const stopResult = await streaming.stop();
+      setIsStreaming(false);
+      setResult(`Final transcription:\n${stopResult.text || '(no speech detected)'}`);
+      setStreamingText('');
+      setConfirmedText('');
+    } catch (error) {
+      setResult(`Error: ${(error as Error).message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [streaming]);
+
+  // ============================================================================
+  // VAD Functions
+  // ============================================================================
+
   const initializeVAD = useCallback(async () => {
     setLoading(true);
     setResult('');
     try {
       await vad.initialize({ threshold: 0.85 });
-      setResult('VAD initialized successfully');
+      setVadReady(true);
+      setResult('VAD initialized successfully\nReady for voice activity detection!');
     } catch (error) {
       setResult(`Error: ${(error as Error).message}`);
     } finally {
@@ -104,7 +147,10 @@ const App = () => {
     }
   }, [vad]);
 
-  // Initialize Diarization
+  // ============================================================================
+  // Diarization Functions
+  // ============================================================================
+
   const initializeDiarization = useCallback(async () => {
     setLoading(true);
     setResult('');
@@ -113,7 +159,8 @@ const App = () => {
         clusteringThreshold: 0.7,
         numClusters: -1, // Auto-detect
       });
-      setResult(`Diarization initialized in ${initResult.compilationDuration.toFixed(2)}s`);
+      setDiarizationReady(true);
+      setResult(`Diarization initialized in ${initResult.compilationDuration.toFixed(2)}s\nReady for speaker identification!`);
     } catch (error) {
       setResult(`Error: ${(error as Error).message}`);
     } finally {
@@ -122,13 +169,17 @@ const App = () => {
     }
   }, [diarizer]);
 
-  // Initialize TTS
+  // ============================================================================
+  // TTS Functions
+  // ============================================================================
+
   const initializeTTS = useCallback(async () => {
     setLoading(true);
     setResult('');
     try {
       await tts.initialize({ variant: 'fiveSecond' });
-      setResult('TTS initialized successfully');
+      setTtsReady(true);
+      setResult('TTS initialized successfully\nReady for speech synthesis!');
     } catch (error) {
       setResult(`Error: ${(error as Error).message}`);
     } finally {
@@ -137,13 +188,17 @@ const App = () => {
     }
   }, [tts]);
 
-  // Synthesize speech
   const synthesizeSpeech = useCallback(async () => {
+    if (!ttsText.trim()) {
+      setResult('Please enter some text to synthesize');
+      return;
+    }
     setLoading(true);
     try {
-      const audio = await tts.synthesize('Hello from FluidAudio!');
+      const audio = await tts.synthesize(ttsText);
       setResult(
-        `Synthesized ${audio.duration.toFixed(2)}s of audio\n` +
+        `Synthesized "${ttsText}"\n` +
+          `Duration: ${audio.duration.toFixed(2)}s\n` +
           `Sample rate: ${audio.sampleRate}Hz`
       );
     } catch (error) {
@@ -151,7 +206,7 @@ const App = () => {
     } finally {
       setLoading(false);
     }
-  }, [tts]);
+  }, [tts, ttsText]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -180,66 +235,130 @@ const App = () => {
           </View>
         ) : null}
 
+        {/* Streaming Transcription Display */}
+        {isStreaming && (
+          <View style={styles.streamingBox}>
+            <Text style={styles.streamingTitle}>Live Transcription</Text>
+            <Text style={styles.confirmedText}>{confirmedText}</Text>
+            <Text style={styles.volatileText}>{streamingText}</Text>
+          </View>
+        )}
+
+        {/* Streaming ASR Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Streaming Speech-to-Text</Text>
+          <Text style={styles.sectionDesc}>Real-time transcription from microphone</Text>
+          {!isStreaming ? (
+            <TouchableOpacity
+              style={[styles.button, styles.buttonPrimary, loading && styles.buttonDisabled]}
+              onPress={startStreaming}
+              disabled={loading}
+            >
+              <Text style={styles.buttonText}>🎤 Start Streaming</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.button, styles.buttonDanger]}
+              onPress={stopStreaming}
+            >
+              <Text style={styles.buttonText}>⏹ Stop Streaming</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
         {/* ASR Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Speech-to-Text (ASR)</Text>
+          <Text style={styles.sectionDesc}>Initialize model for file transcription</Text>
           <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
+            style={[
+              styles.button,
+              asrReady ? styles.buttonSuccess : styles.buttonSecondary,
+              loading && styles.buttonDisabled,
+            ]}
             onPress={initializeASR}
-            disabled={loading}
+            disabled={loading || asrReady}
           >
-            <Text style={styles.buttonText}>Initialize ASR</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={transcribeFile}
-            disabled={loading}
-          >
-            <Text style={styles.buttonText}>Transcribe File</Text>
+            <Text style={styles.buttonText}>
+              {asrReady ? '✓ ASR Ready' : 'Initialize ASR'}
+            </Text>
           </TouchableOpacity>
         </View>
 
         {/* VAD Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Voice Activity Detection</Text>
+          <Text style={styles.sectionDesc}>Detect speech segments in audio</Text>
           <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
+            style={[
+              styles.button,
+              vadReady ? styles.buttonSuccess : styles.buttonSecondary,
+              loading && styles.buttonDisabled,
+            ]}
             onPress={initializeVAD}
-            disabled={loading}
+            disabled={loading || vadReady}
           >
-            <Text style={styles.buttonText}>Initialize VAD</Text>
+            <Text style={styles.buttonText}>
+              {vadReady ? '✓ VAD Ready' : 'Initialize VAD'}
+            </Text>
           </TouchableOpacity>
         </View>
 
         {/* Diarization Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Speaker Diarization</Text>
+          <Text style={styles.sectionDesc}>Identify different speakers in audio</Text>
           <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
+            style={[
+              styles.button,
+              diarizationReady ? styles.buttonSuccess : styles.buttonSecondary,
+              loading && styles.buttonDisabled,
+            ]}
             onPress={initializeDiarization}
-            disabled={loading}
+            disabled={loading || diarizationReady}
           >
-            <Text style={styles.buttonText}>Initialize Diarization</Text>
+            <Text style={styles.buttonText}>
+              {diarizationReady ? '✓ Diarization Ready' : 'Initialize Diarization'}
+            </Text>
           </TouchableOpacity>
         </View>
 
         {/* TTS Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Text-to-Speech</Text>
+          <Text style={styles.sectionDesc}>Convert text to natural speech</Text>
           <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
+            style={[
+              styles.button,
+              ttsReady ? styles.buttonSuccess : styles.buttonSecondary,
+              loading && styles.buttonDisabled,
+            ]}
             onPress={initializeTTS}
-            disabled={loading}
+            disabled={loading || ttsReady}
           >
-            <Text style={styles.buttonText}>Initialize TTS</Text>
+            <Text style={styles.buttonText}>
+              {ttsReady ? '✓ TTS Ready' : 'Initialize TTS'}
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={synthesizeSpeech}
-            disabled={loading}
-          >
-            <Text style={styles.buttonText}>Synthesize Speech</Text>
-          </TouchableOpacity>
+
+          {ttsReady && (
+            <View style={styles.ttsInputContainer}>
+              <TextInput
+                style={styles.ttsInput}
+                value={ttsText}
+                onChangeText={setTtsText}
+                placeholder="Enter text to speak..."
+                multiline
+              />
+              <TouchableOpacity
+                style={[styles.button, styles.buttonPrimary, loading && styles.buttonDisabled]}
+                onPress={synthesizeSpeech}
+                disabled={loading}
+              >
+                <Text style={styles.buttonText}>🔊 Synthesize</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Result Display */}
@@ -265,6 +384,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
+    paddingBottom: 40,
   },
   title: {
     fontSize: 28,
@@ -303,21 +423,60 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#e65100',
   },
-  section: {
+  streamingBox: {
+    backgroundColor: '#1a1a2e',
+    padding: 15,
+    borderRadius: 10,
     marginBottom: 20,
+  },
+  streamingTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4fc3f7',
+    marginBottom: 10,
+  },
+  confirmedText: {
+    fontSize: 16,
+    color: '#ffffff',
+    lineHeight: 24,
+  },
+  volatileText: {
+    fontSize: 16,
+    color: '#81d4fa',
+    fontStyle: 'italic',
+    lineHeight: 24,
+  },
+  section: {
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 10,
+    marginBottom: 4,
     color: '#333',
   },
-  button: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+  sectionDesc: {
+    fontSize: 13,
+    color: '#666',
     marginBottom: 10,
+  },
+  button: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  buttonPrimary: {
+    backgroundColor: '#007AFF',
+  },
+  buttonSecondary: {
+    backgroundColor: '#5856D6',
+  },
+  buttonSuccess: {
+    backgroundColor: '#34C759',
+  },
+  buttonDanger: {
+    backgroundColor: '#FF3B30',
   },
   buttonDisabled: {
     backgroundColor: '#ccc',
@@ -327,6 +486,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  ttsInputContainer: {
+    marginTop: 10,
+  },
+  ttsInput: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    marginBottom: 10,
+    minHeight: 60,
   },
   resultBox: {
     backgroundColor: '#e8f5e9',

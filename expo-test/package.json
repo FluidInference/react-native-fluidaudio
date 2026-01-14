@@ -7,7 +7,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "sync-fluidaudio": "rm -rf node_modules/@fluidinference/react-native-fluidaudio && mkdir -p node_modules/@fluidinference/react-native-fluidaudio && cp -R ../package.json ../lib ../ios ../src node_modules/@fluidinference/react-native-fluidaudio/",
+    "sync-fluidaudio": "rm -rf node_modules/@fluidinference/react-native-fluidaudio && mkdir -p node_modules/@fluidinference/react-native-fluidaudio && cp -R ../package.json ../lib ../ios ../src ../react-native-fluidaudio.podspec ../react-native.config.js node_modules/@fluidinference/react-native-fluidaudio/",
     "prestart": "npm run sync-fluidaudio",
     "prebuild": "npm run sync-fluidaudio"
   },

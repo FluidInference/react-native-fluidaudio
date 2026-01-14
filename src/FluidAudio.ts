@@ -36,7 +36,10 @@ const FluidAudioNative: FluidAudioNativeModule = NativeModules.FluidAudioModule
       }
     );
 
-const eventEmitter = new NativeEventEmitter(NativeModules.FluidAudioModule);
+// Create event emitter only if the native module exists
+const eventEmitter = NativeModules.FluidAudioModule
+  ? new NativeEventEmitter(NativeModules.FluidAudioModule)
+  : null;
 
 // ============================================================================
 // Event Subscription Helpers
@@ -54,6 +57,10 @@ export interface EventSubscription {
  * Subscribe to streaming transcription updates
  */
 export function onStreamingUpdate(handler: StreamingUpdateHandler): EventSubscription {
+  if (!eventEmitter) {
+    console.warn('FluidAudio native module not available');
+    return { remove: () => {} };
+  }
   const subscription = eventEmitter.addListener('onStreamingUpdate', handler);
   return { remove: () => subscription.remove() };
 }
@@ -62,6 +69,10 @@ export function onStreamingUpdate(handler: StreamingUpdateHandler): EventSubscri
  * Subscribe to model loading progress events
  */
 export function onModelLoadProgress(handler: ModelLoadProgressHandler): EventSubscription {
+  if (!eventEmitter) {
+    console.warn('FluidAudio native module not available');
+    return { remove: () => {} };
+  }
   const subscription = eventEmitter.addListener('onModelLoadProgress', handler);
   return { remove: () => subscription.remove() };
 }
@@ -70,6 +81,10 @@ export function onModelLoadProgress(handler: ModelLoadProgressHandler): EventSub
  * Subscribe to transcription errors
  */
 export function onTranscriptionError(handler: ErrorHandler): EventSubscription {
+  if (!eventEmitter) {
+    console.warn('FluidAudio native module not available');
+    return { remove: () => {} };
+  }
   const subscription = eventEmitter.addListener('onTranscriptionError', handler);
   return { remove: () => subscription.remove() };
 }
