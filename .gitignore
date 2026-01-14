@@ -9,11 +9,6 @@ build/
 *.xcodeproj/project.xcworkspace/
 DerivedData/
 
-# FluidAudio build artifacts
-FluidAudio/.build/
-FluidAudio/.swiftpm/
-FluidAudio/Datasets/
-
 # IDE
 .idea/
 .vscode/

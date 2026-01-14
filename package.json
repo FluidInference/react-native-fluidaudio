@@ -11,14 +11,10 @@
     "src",
     "lib",
     "ios",
-    "FluidAudio",
     "react-native-fluidaudio.podspec",
     "!**/__tests__",
     "!**/__fixtures__",
-    "!**/__mocks__",
-    "!**/FluidAudio/.build",
-    "!**/FluidAudio/.git",
-    "!**/FluidAudio/Datasets"
+    "!**/__mocks__"
   ],
   "scripts": {
     "test": "jest",

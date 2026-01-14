@@ -20,10 +20,19 @@ React Native wrapper for [FluidAudio](../FluidAudio) - a Swift library for ASR, 
 
 ```bash
 npm install react-native-fluidaudio
-cd ios && pod install
 ```
 
-That's it. FluidAudio is bundled and auto-linked.
+Add FluidAudio to your `ios/Podfile`:
+
+```ruby
+pod 'FluidAudio', :git => 'https://github.com/FluidInference/FluidAudio.git', :tag => 'v0.7.8'
+```
+
+Then install pods:
+
+```bash
+cd ios && pod install
+```
 
 **Note:** Requires **arm64** architecture (Apple Silicon). Simulator builds only work on M1/M2/M3 Macs.
 

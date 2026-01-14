@@ -18,47 +18,18 @@ Pod::Spec.new do |s|
   # React Native bridge
   s.dependency "React-Core"
 
-  # C++ wrapper subspec (from FluidAudio)
-  s.subspec "FastClusterWrapper" do |wrapper|
-    wrapper.requires_arc = false
-    wrapper.source_files = "FluidAudio/Sources/FastClusterWrapper/**/*.{cpp,h,hpp}"
-    wrapper.public_header_files = "FluidAudio/Sources/FastClusterWrapper/include/FastClusterWrapper.h"
-    wrapper.private_header_files = "FluidAudio/Sources/FastClusterWrapper/fastcluster_internal.hpp"
-    wrapper.header_mappings_dir = "FluidAudio/Sources/FastClusterWrapper"
-    wrapper.pod_target_xcconfig = {
-      'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17'
-    }
-  end
+  # FluidAudio dependency (fetched from GitHub)
+  s.dependency "FluidAudio", "~> 0.7"
 
-  # Mach task wrapper subspec (from FluidAudio)
-  s.subspec "MachTaskSelfWrapper" do |mach|
-    mach.source_files = "FluidAudio/Sources/MachTaskSelfWrapper/**/*.{c,h}"
-    mach.public_header_files = "FluidAudio/Sources/MachTaskSelfWrapper/include/MachTaskSelf.h"
-    mach.header_mappings_dir = "FluidAudio/Sources/MachTaskSelfWrapper"
-    mach.module_map = "FluidAudio/Sources/MachTaskSelfWrapper/include/module.modulemap"
-  end
+  # React Native bridge source files only
+  s.source_files = "ios/**/*.{h,m,mm,swift}"
 
-  # Core module (FluidAudio + React Native bridge)
-  s.subspec "Core" do |core|
-    core.dependency "#{s.name}/FastClusterWrapper"
-    core.dependency "#{s.name}/MachTaskSelfWrapper"
-
-    # FluidAudio Swift sources
-    core.source_files = [
-      "FluidAudio/Sources/FluidAudio/**/*.swift",
-      "ios/**/*.{h,m,mm,swift}"
-    ]
-
-    core.ios.frameworks = "CoreML", "AVFoundation", "Accelerate", "UIKit"
-  end
-
-  s.default_subspecs = ["Core"]
+  s.ios.frameworks = "CoreML", "AVFoundation", "Accelerate", "UIKit"
 
   # Compiler flags
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
     'SWIFT_COMPILATION_MODE' => 'wholemodule',
-    'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
     'ARCHS[sdk=iphonesimulator*]' => 'arm64',
     'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386 x86_64',
     'ARCHS[sdk=iphoneos*]' => 'arm64'
