@@ -8,10 +8,6 @@ require Pod::Executable.execute_command('node', ['-p',
 platform :ios, '17.0'
 prepare_react_native_project!
 
-# Enable New Architecture (TurboModules + Fabric)
-# Set to '1' to enable, '0' for legacy bridge
-ENV['RCT_NEW_ARCH_ENABLED'] ||= '0'
-
 linkage = ENV['USE_FRAMEWORKS']
 if linkage != nil
   Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
@@ -21,13 +17,17 @@ end
 target 'FluidAudioExample' do
   config = use_native_modules!
 
+  # FluidAudio native library
+  pod 'FluidAudio', '~> 0.7'
+
   use_react_native!(
     :path => config[:reactNativePath],
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
 
-  # FluidAudio dependency
-  pod 'FluidAudio', :git => 'https://github.com/FluidInference/FluidAudio.git', :tag => 'v0.7.8'
+  target 'FluidAudioExampleTests' do
+    inherit! :complete
+  end
 
   post_install do |installer|
     react_native_post_install(
@@ -35,13 +35,5 @@ target 'FluidAudioExample' do
       config[:reactNativePath],
       :mac_catalyst_enabled => false
     )
-
-    # Force arm64 for simulator (Apple Silicon only)
-    installer.pods_project.targets.each do |target|
-      target.build_configurations.each do |config|
-        config.build_settings['ARCHS[sdk=iphonesimulator*]'] = 'arm64'
-        config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'i386 x86_64'
-      end
-    end
   end
 end
