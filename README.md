@@ -196,12 +196,6 @@ await cleanup();
 
 See [src/types.ts](./src/types.ts) for complete TypeScript definitions.
 
-## Performance
-
-On Apple Silicon (M4 Pro):
-- **ASR**: ~210x realtime (10 second audio transcribed in ~50ms)
-- **VAD**: Real-time capable (256ms chunks)
-- **Diarization**: 17.7% DER on AMI dataset
 
 ## Notes
 
