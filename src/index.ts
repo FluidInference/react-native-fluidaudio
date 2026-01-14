@@ -4,6 +4,8 @@ export {
   // System
   getSystemInfo,
   isAppleSilicon,
+  isNewArchitecture,
+  hasZeroCopySupport,
   // Managers
   ASRManager,
   StreamingASRManager,
@@ -18,6 +20,7 @@ export {
   cleanup,
   // Types
   type EventSubscription,
+  type TTSBufferResult,
 } from './FluidAudio';
 
 // Re-export all types

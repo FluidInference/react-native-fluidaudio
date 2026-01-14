@@ -216,9 +216,46 @@ The TTS module uses ESpeakNG which is GPL licensed. Check license compatibility 
 
 ## Architecture
 
-This package uses the **Bridge-based Native Module** architecture for compatibility with React Native 0.71+.
+This package supports both React Native architectures:
 
-Future versions may migrate to **Turbo Modules** (New Architecture) for improved performance. The async nature of audio processing means the Bridge overhead is minimal for this use case.
+### New Architecture (Recommended)
+- **TurboModules** for type-safe native module interface
+- **JSI (JavaScript Interface)** for zero-copy audio buffer transfer
+- **Codegen** for automatic type synchronization
+
+Enable New Architecture in your app:
+```bash
+# iOS
+cd ios && RCT_NEW_ARCH_ENABLED=1 pod install
+```
+
+### Legacy Architecture
+- Falls back to Bridge-based modules automatically
+- Audio data transferred as base64 strings
+- Fully functional, slightly higher latency for large audio
+
+### Zero-Copy API
+
+When New Architecture is enabled, use `ArrayBuffer` methods for best performance:
+
+```typescript
+import { ASRManager, hasZeroCopySupport } from 'react-native-fluidaudio';
+
+// Check if zero-copy is available
+if (hasZeroCopySupport()) {
+  console.log('Using JSI zero-copy audio transfer');
+}
+
+const asr = new ASRManager();
+await asr.initialize();
+
+// Zero-copy transcription (New Architecture)
+const audioBuffer = new ArrayBuffer(audioData.length);
+const result = await asr.transcribeBuffer(audioBuffer, 16000);
+
+// Legacy API still works (falls back automatically)
+const result2 = await asr.transcribe(base64Audio, 16000);
+```
 
 ## License
 

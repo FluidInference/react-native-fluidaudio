@@ -11,11 +11,22 @@
     "src",
     "lib",
     "ios",
+    "cpp",
     "react-native-fluidaudio.podspec",
     "!**/__tests__",
     "!**/__fixtures__",
     "!**/__mocks__"
   ],
+  "codegenConfig": {
+    "name": "FluidAudioSpec",
+    "type": "modules",
+    "jsSrcsDir": "src",
+    "ios": {
+      "modulesConformingToProtocol": {
+        "RCTEventEmitter": ["FluidAudio"]
+      }
+    }
+  },
   "scripts": {
     "test": "jest",
     "test:watch": "jest --watch",
