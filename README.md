@@ -1,6 +1,10 @@
 # react-native-fluidaudio
 
-React Native wrapper for [FluidAudio](../FluidAudio) - a Swift library for ASR, VAD, Speaker Diarization, and TTS on Apple platforms.
+React Native wrapper for [FluidAudio](https://github.com/FluidInference/FluidAudio) - a Swift library for ASR, VAD, Speaker Diarization, and TTS on Apple platforms.
+
+<p align="center">
+  <img src="docs/expo-demo.png" alt="FluidAudio Expo Demo" width="300">
+</p>
 
 ## Features
 
@@ -13,9 +17,11 @@ React Native wrapper for [FluidAudio](../FluidAudio) - a Swift library for ASR, 
 ## Requirements
 
 - iOS 17.0+
-- React Native 0.71+
+- React Native 0.71+ or Expo SDK 50+
 
 ## Installation
+
+### React Native CLI
 
 ```bash
 npm install react-native-fluidaudio
@@ -32,6 +38,18 @@ Then install pods:
 ```bash
 cd ios && pod install
 ```
+
+### Expo
+
+For Expo projects, use a [development build](https://docs.expo.dev/develop/development-builds/introduction/):
+
+```bash
+npx expo install react-native-fluidaudio
+npx expo prebuild
+npx expo run:ios
+```
+
+> **Note:** Expo Go is not supported - native modules require a development build.
 
 ## Usage
 
