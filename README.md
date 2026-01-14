@@ -1,5 +1,7 @@
 # react-native-fluidaudio
 
+[![DeepWiki](https://img.shields.io/badge/DeepWiki-FluidInference%2Freact--native--fluidaudio-blue?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNCAxOWgxNmMuNTUgMCAxLS40NSAxLTFWNmMwLS41NS0uNDUtMS0xLTFINEMzLjQ1IDUgMyA1LjQ1IDMgNnYxMmMwIC41NS40NSAxIDEgMXoiLz48cGF0aCBkPSJNMTIgOHY4Ii8+PHBhdGggZD0iTTggMTJoOCIvPjwvc3ZnPg==)](https://deepwiki.com/FluidInference/react-native-fluidaudio)
+
 React Native wrapper for [FluidAudio](https://github.com/FluidInference/FluidAudio) - a Swift library for ASR, VAD, Speaker Diarization, and TTS on Apple platforms.
 
 <p align="center">
