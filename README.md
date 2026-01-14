@@ -5,7 +5,8 @@
 React Native wrapper for [FluidAudio](https://github.com/FluidInference/FluidAudio) - a Swift library for ASR, VAD, Speaker Diarization, and TTS on Apple platforms.
 
 <p align="center">
-  <img src="docs/expo-demo.png" alt="FluidAudio Expo Demo" width="300">
+  <img width="750" height="1626" alt="image" src="https://github.com/user-attachments/assets/3b6d94fc-e71f-4178-881d-3b37f89c83c7" />
+
 </p>
 
 ## Features
