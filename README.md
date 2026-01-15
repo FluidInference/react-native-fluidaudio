@@ -1,5 +1,6 @@
 # react-native-fluidaudio
 
+[![npm](https://img.shields.io/npm/v/@fluidinference/react-native-fluidaudio)](https://www.npmjs.com/package/@fluidinference/react-native-fluidaudio)
 [![DeepWiki](https://img.shields.io/badge/DeepWiki-FluidInference%2Freact--native--fluidaudio-blue?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNCAxOWgxNmMuNTUgMCAxLS40NSAxLTFWNmMwLS41NS0uNDUtMS0xLTFINEMzLjQ1IDUgMyA1LjQ1IDMgNnYxMmMwIC41NS40NSAxIDEgMXoiLz48cGF0aCBkPSJNMTIgOHY4Ii8+PHBhdGggZD0iTTggMTJoOCIvPjwvc3ZnPg==)](https://deepwiki.com/FluidInference/react-native-fluidaudio)
 
 React Native wrapper for [FluidAudio](https://github.com/FluidInference/FluidAudio) - a Swift library for ASR, VAD, Speaker Diarization, and TTS on Apple platforms.
@@ -27,7 +28,7 @@ React Native wrapper for [FluidAudio](https://github.com/FluidInference/FluidAud
 ### React Native CLI
 
 ```bash
-npm install react-native-fluidaudio
+npm install @fluidinference/react-native-fluidaudio
 ```
 
 Add FluidAudio to your `ios/Podfile`:
@@ -47,7 +48,7 @@ cd ios && pod install
 For Expo projects, use a [development build](https://docs.expo.dev/develop/development-builds/introduction/):
 
 ```bash
-npx expo install react-native-fluidaudio
+npx expo install @fluidinference/react-native-fluidaudio
 npx expo prebuild
 npx expo run:ios
 ```
@@ -59,7 +60,7 @@ npx expo run:ios
 ### Basic Transcription
 
 ```typescript
-import { ASRManager, onModelLoadProgress } from 'react-native-fluidaudio';
+import { ASRManager, onModelLoadProgress } from '@fluidinference/react-native-fluidaudio';
 
 // Monitor model loading progress
 const subscription = onModelLoadProgress((event) => {
@@ -83,7 +84,7 @@ subscription.remove();
 ### Streaming Transcription
 
 ```typescript
-import { StreamingASRManager, onStreamingUpdate } from 'react-native-fluidaudio';
+import { StreamingASRManager, onStreamingUpdate } from '@fluidinference/react-native-fluidaudio';
 
 const streaming = new StreamingASRManager();
 
@@ -104,7 +105,7 @@ console.log('Final transcription:', result.text);
 ### Voice Activity Detection
 
 ```typescript
-import { VADManager } from 'react-native-fluidaudio';
+import { VADManager } from '@fluidinference/react-native-fluidaudio';
 
 const vad = new VADManager();
 await vad.initialize({ threshold: 0.85 });
@@ -122,7 +123,7 @@ segments.forEach((seg) => {
 ### Speaker Diarization
 
 ```typescript
-import { DiarizationManager } from 'react-native-fluidaudio';
+import { DiarizationManager } from '@fluidinference/react-native-fluidaudio';
 
 const diarizer = new DiarizationManager();
 await diarizer.initialize({
@@ -151,7 +152,7 @@ await diarizer.setKnownSpeakers([
 ### Text-to-Speech
 
 ```typescript
-import { TTSManager } from 'react-native-fluidaudio';
+import { TTSManager } from '@fluidinference/react-native-fluidaudio';
 
 const tts = new TTSManager();
 await tts.initialize({ variant: 'fiveSecond' });
@@ -168,7 +169,7 @@ await tts.synthesizeToFile('Hello, world!', '/path/to/output.wav');
 ### System Information
 
 ```typescript
-import { getSystemInfo } from 'react-native-fluidaudio';
+import { getSystemInfo } from '@fluidinference/react-native-fluidaudio';
 
 const info = await getSystemInfo();
 console.log(info.summary);
@@ -178,7 +179,7 @@ console.log(info.summary);
 ### Cleanup
 
 ```typescript
-import { cleanup } from 'react-native-fluidaudio';
+import { cleanup } from '@fluidinference/react-native-fluidaudio';
 
 // Clean up all resources when done
 await cleanup();
