@@ -1,6 +1,6 @@
 {
   "name": "@fluidinference/react-native-fluidaudio",
-  "version": "0.1.0",
+  "version": "0.10.0",
   "description": "React Native wrapper for FluidAudio - ASR, VAD, Diarization, and TTS",
   "main": "lib/commonjs/index",
   "module": "lib/module/index",

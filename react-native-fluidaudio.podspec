@@ -19,7 +19,7 @@ Pod::Spec.new do |s|
   s.dependency "React-Core"
 
   # FluidAudio dependency (fetched from GitHub)
-  s.dependency "FluidAudio", "~> 0.7"
+  s.dependency "FluidAudio", "0.10.0"
 
   s.ios.frameworks = "CoreML", "AVFoundation", "Accelerate", "UIKit"
 
