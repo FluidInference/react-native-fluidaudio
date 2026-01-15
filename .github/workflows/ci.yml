@@ -11,9 +11,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # TypeScript type checking and Jest tests
-  test-js:
-    name: TypeScript & Jest
+  # All JS checks in one job (fast, cheap ubuntu runner)
+  test:
+    name: Test & Validate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -28,59 +28,38 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Lint
+        run: npm run lint
+
       - name: Type check
         run: npm run typescript
 
       - name: Run tests
         run: npm run test -- --coverage --ci
 
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        if: always()
-        with:
-          files: ./coverage/lcov.info
-          fail_ci_if_error: false
+      - name: Build package
+        run: npm run prepare
 
-  # Build iOS example app
+      - name: Verify package contents
+        run: npm pack --dry-run
+
+      - name: Verify exports
+        run: |
+          node -e "
+            const fs = require('fs');
+            const indexContent = fs.readFileSync('./lib/commonjs/index.js', 'utf8');
+            const expected = ['ASRManager', 'StreamingASRManager', 'VADManager', 'DiarizationManager', 'TTSManager', 'getSystemInfo', 'isAppleSilicon', 'cleanup'];
+            const missing = expected.filter(e => !indexContent.includes(e));
+            if (missing.length) {
+              console.error('Missing exports:', missing);
+              process.exit(1);
+            }
+            console.log('All exports found');
+          "
+
+  # iOS build (expensive macos runner - only Expo)
   build-ios:
     name: Build iOS
-    runs-on: macos-15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install example dependencies
-        run: cd example && npm install
-
-      - name: Install CocoaPods
-        run: gem install cocoapods
-
-      - name: Pod install
-        run: cd example/ios && pod install
-
-      - name: Build iOS
-        run: |
-          xcodebuild \
-            -workspace example/ios/FluidAudioExample.xcworkspace \
-            -scheme FluidAudioExample \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
-            build \
-            CODE_SIGNING_ALLOWED=NO
-
-  # Build Expo test app
-  build-expo:
-    name: Build Expo
     runs-on: macos-15
     steps:
       - name: Checkout
@@ -120,62 +99,3 @@ jobs:
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
             build \
             CODE_SIGNING_ALLOWED=NO
-
-  # Lint check
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run ESLint
-        run: npm run lint
-        continue-on-error: true
-
-  # Package validation
-  package:
-    name: Package Validation
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build package
-        run: npm run prepare
-
-      - name: Check package contents
-        run: npm pack --dry-run
-
-      - name: Verify exports
-        run: |
-          # Check that compiled files exist and export the expected symbols
-          node -e "
-            const fs = require('fs');
-            const indexContent = fs.readFileSync('./lib/commonjs/index.js', 'utf8');
-            const expected = ['ASRManager', 'StreamingASRManager', 'VADManager', 'DiarizationManager', 'TTSManager', 'getSystemInfo', 'isAppleSilicon', 'cleanup'];
-            const missing = expected.filter(e => !indexContent.includes(e));
-            if (missing.length) {
-              console.error('Missing exports:', missing);
-              process.exit(1);
-            }
-            console.log('All exports found in compiled output');
-          "
