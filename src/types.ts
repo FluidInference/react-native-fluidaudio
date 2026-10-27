@@ -65,19 +65,45 @@ export interface ASRInitResult {
 // Streaming ASR
 // ============================================================================
 
+/**
+ * Streaming ASR model: a FluidAudio `StreamingModelVariant` raw value.
+ * Parakeet EOU and Nemotron are English-only. Parakeet Unified's int8 encoder
+ * does not load on some iPhones (A16), so prefer Parakeet EOU on iOS.
+ */
+export type StreamingModel =
+  | 'parakeet-eou-160ms'
+  | 'parakeet-eou-320ms'
+  | 'parakeet-eou-1280ms'
+  | 'nemotron-560ms'
+  | 'nemotron-1120ms'
+  | 'nemotron-2240ms'
+  | 'parakeet-unified-320ms'
+  | 'parakeet-unified-640ms'
+  | 'parakeet-unified-1120ms'
+  | 'parakeet-unified-2080ms'
+  | 'parakeet-unified-offline-15s';
+
 export interface StreamingASRConfig {
-  /** Audio source: 'microphone' or 'system' (macOS only) */
-  source?: 'microphone' | 'system';
-  /** Chunk duration in seconds */
+  /**
+   * Audio source (default: 'microphone').
+   * - 'microphone': the module records the microphone itself.
+   * - 'manual': the app supplies the audio with `feedAudio` / `feedBuffer`.
+   */
+  source?: 'microphone' | 'manual';
+  /** Streaming model (default: 'parakeet-eou-320ms') */
+  model?: StreamingModel;
+  /** @deprecated Ignored: the chunk size is set by `model`. */
   chunkDuration?: number;
 }
 
 export interface StreamingUpdate {
-  /** Current volatile (unconfirmed) transcript */
+  /** Unconfirmed text. Always empty: the streaming models never revise text they have emitted. */
   volatile: string;
-  /** Confirmed transcript */
+  /** Transcript so far */
   confirmed: string;
-  /** Whether this is the final update */
+  /** Same as `confirmed` */
+  text: string;
+  /** True for the last update, sent when streaming stops */
   isFinal: boolean;
 }
 
@@ -206,7 +232,7 @@ export interface TTSResult {
 // ============================================================================
 
 export interface ModelLoadProgressEvent {
-  type?: 'asr' | 'diarization' | 'vad' | 'tts';
+  type?: 'asr' | 'streaming' | 'diarization' | 'vad' | 'tts';
   status: 'downloading' | 'compiling' | 'ready';
   progress: number;
 }
@@ -236,8 +262,10 @@ export interface FluidAudioNativeModule {
   isAsrAvailable(): Promise<boolean>;
 
   // Streaming ASR
-  startStreamingAsr(config?: StreamingASRConfig): Promise<{ success: boolean }>;
-  feedStreamingAudio(base64Audio: string): Promise<{ success: boolean }>;
+  startStreamingAsr(
+    config?: StreamingASRConfig
+  ): Promise<{ success: boolean; source: string; model: string }>;
+  feedStreamingAudio(base64Audio: string): Promise<{ success: boolean; samples: number }>;
   stopStreamingAsr(): Promise<StreamingStopResult>;
 
   // VAD

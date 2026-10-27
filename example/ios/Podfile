@@ -17,9 +17,6 @@ end
 target 'FluidAudioExample' do
   config = use_native_modules!
 
-  # FluidAudio native library
-  pod 'FluidAudio', '~> 0.7'
-
   use_react_native!(
     :path => config[:reactNativePath],
     :app_path => "#{Pod::Config.instance.installation_root}/.."
