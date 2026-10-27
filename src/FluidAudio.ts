@@ -185,6 +185,9 @@ export class StreamingASRManager {
 
   /**
    * Start streaming transcription
+   *
+   * With `source: 'microphone'` (the default) the module records the microphone.
+   * With `source: 'manual'` it transcribes only the audio passed to `feedAudio` / `feedBuffer`.
    * @param config Streaming configuration
    * @param onUpdate Callback for transcription updates
    */
@@ -202,8 +205,8 @@ export class StreamingASRManager {
   }
 
   /**
-   * Feed audio data using ArrayBuffer
-   * @param audioBuffer ArrayBuffer containing 16-bit PCM audio at 16kHz
+   * Feed audio to a session started with `source: 'manual'`
+   * @param audioBuffer Little-endian 16-bit mono PCM at 16 kHz
    */
   async feedBuffer(audioBuffer: ArrayBuffer): Promise<void> {
     if (!this.streaming) {
@@ -214,8 +217,8 @@ export class StreamingASRManager {
   }
 
   /**
-   * Feed audio data
-   * @param base64Audio Base64-encoded 16-bit PCM audio at 16kHz
+   * Feed audio to a session started with `source: 'manual'`
+   * @param base64Audio Base64-encoded little-endian 16-bit mono PCM at 16 kHz
    */
   async feedAudio(base64Audio: string): Promise<void> {
     if (!this.streaming) {
@@ -226,14 +229,19 @@ export class StreamingASRManager {
 
   /**
    * Stop streaming and get final transcription
+   *
+   * Audio already fed is transcribed before this resolves, and the update
+   * handler receives a last update with `isFinal: true`.
    */
   async stop(): Promise<StreamingStopResult> {
-    this.updateSubscription?.remove();
-    this.updateSubscription = null;
-
-    const result = await FluidAudioNative.stopStreamingAsr();
-    this.streaming = false;
-    return result;
+    try {
+      const result = await FluidAudioNative.stopStreamingAsr();
+      this.streaming = false;
+      return result;
+    } finally {
+      this.updateSubscription?.remove();
+      this.updateSubscription = null;
+    }
   }
 
   /**

@@ -94,18 +94,21 @@ describe('Type Definitions', () => {
       expect(config.source).toBe('microphone');
     });
 
-    it('should support system audio source', () => {
+    it('should support a manual source and a model choice', () => {
       const config: StreamingASRConfig = {
-        source: 'system',
+        source: 'manual',
+        model: 'parakeet-eou-160ms',
       };
 
-      expect(config.source).toBe('system');
+      expect(config.source).toBe('manual');
+      expect(config.model).toBe('parakeet-eou-160ms');
     });
 
     it('should define StreamingUpdate correctly', () => {
       const update: StreamingUpdate = {
-        volatile: 'partial',
+        volatile: '',
         confirmed: 'full',
+        text: 'full',
         isFinal: false,
       };
 

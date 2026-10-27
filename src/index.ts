@@ -33,6 +33,7 @@ export type {
   ASRPerformanceMetrics,
   // Streaming ASR
   StreamingASRConfig,
+  StreamingModel,
   StreamingUpdate,
   StreamingStopResult,
   // VAD

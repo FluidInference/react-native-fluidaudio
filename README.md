@@ -12,7 +12,7 @@ React Native wrapper for [FluidAudio](https://github.com/FluidInference/FluidAud
 ## Features
 
 - **ASR (Automatic Speech Recognition)** - High-quality speech-to-text using Parakeet TDT models
-- **Streaming ASR** - Real-time transcription from microphone or system audio
+- **Streaming ASR** - Real-time transcription from the microphone or from audio you feed in
 - **VAD (Voice Activity Detection)** - Detect speech segments in audio
 - **Speaker Diarization** - Identify and track different speakers
 - **TTS (Text-to-Speech)** - Natural voice synthesis using Kokoro TTS
@@ -20,7 +20,9 @@ React Native wrapper for [FluidAudio](https://github.com/FluidInference/FluidAud
 ## Requirements
 
 - iOS 17.0+
-- React Native 0.71+ or Expo SDK 50+
+- React Native 0.75+ or Expo SDK 52+
+
+FluidAudio (0.17.7 and later 0.17.x releases) is pulled from GitHub through Swift Package Manager with React Native's `spm_dependency` podspec helper, which needs React Native 0.75. CocoaPods trunk only has FluidAudio 0.7.8 and goes read-only on December 2, 2026.
 
 ## Installation
 
@@ -41,6 +43,8 @@ Expo automatically handles native dependencies - no manual pod install needed.
 npm install @fluidinference/react-native-fluidaudio
 cd ios && pod install
 ```
+
+Remove any `pod 'FluidAudio'` line from your Podfile: the package brings FluidAudio in itself. If the app fails to link with static pods, install with `USE_FRAMEWORKS=dynamic pod install` (see [react-native#44627](https://github.com/facebook/react-native/pull/44627#issuecomment-2123119711)).
 
 ## Usage
 
@@ -75,19 +79,23 @@ import { StreamingASRManager, onStreamingUpdate } from '@fluidinference/react-na
 
 const streaming = new StreamingASRManager();
 
-// Start streaming with update callback
+// Transcribe the microphone (the module records it)
 await streaming.start({ source: 'microphone' }, (update) => {
-  console.log('Confirmed:', update.confirmed);
-  console.log('Volatile:', update.volatile);
+  console.log('Transcript so far:', update.confirmed);
 });
 
-// Feed audio data (16-bit PCM, 16kHz, base64 encoded)
-await streaming.feedAudio(base64AudioChunk);
+// ...or transcribe audio you supply: little-endian 16-bit mono PCM at 16 kHz
+await streaming.start({ source: 'manual' }, (update) => {
+  console.log('Transcript so far:', update.confirmed);
+});
+await streaming.feedAudio(base64AudioChunk); // or feedBuffer(arrayBuffer)
 
-// Stop and get final result
+// Stop: queued audio is transcribed first, then the final text is returned
 const result = await streaming.stop();
 console.log('Final transcription:', result.text);
 ```
+
+`feedAudio` / `feedBuffer` only work in a `'manual'` session; in a microphone session they reject. The default model is Parakeet EOU 320 ms (English); pick another with `model`, e.g. `{ source: 'manual', model: 'parakeet-eou-160ms' }`. The first start downloads and compiles the model.
 
 ### Voice Activity Detection
 

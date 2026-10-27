@@ -59,6 +59,90 @@ enum AudioUtils {
 
         return outputSamples
     }
+
+    /// Decode little-endian 16-bit PCM into Float samples in [-1, 1).
+    /// Base64-decoded `Data` has no alignment guarantee, so read each sample unaligned.
+    static func int16LEToFloat(_ data: Data) -> [Float] {
+        let count = data.count / 2
+        return data.withUnsafeBytes { raw -> [Float] in
+            (0..<count).map { index in
+                let sample = Int16(littleEndian: raw.loadUnaligned(fromByteOffset: index * 2, as: Int16.self))
+                return Float(sample) / 32768.0
+            }
+        }
+    }
+
+    /// Wrap little-endian 16-bit mono PCM in a Float32 buffer at `sampleRate`.
+    static func pcm16MonoBuffer(from data: Data, sampleRate: Double) -> AVAudioPCMBuffer? {
+        let samples = int16LEToFloat(data)
+        guard !samples.isEmpty,
+            let format = AVAudioFormat(
+                commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false),
+            let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)),
+            let channel = buffer.floatChannelData?[0]
+        else { return nil }
+        buffer.frameLength = AVAudioFrameCount(samples.count)
+        samples.withUnsafeBufferPointer { source in
+            channel.update(from: source.baseAddress!, count: samples.count)
+        }
+        return buffer
+    }
+
+    /// Copy a tap buffer: the engine reuses it once the tap block returns.
+    static func copy(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        guard let copy = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameLength) else {
+            return nil
+        }
+        copy.frameLength = buffer.frameLength
+        let source = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: buffer.audioBufferList))
+        let destination = UnsafeMutableAudioBufferListPointer(copy.mutableAudioBufferList)
+        for (from, to) in zip(source, destination) {
+            guard let fromData = from.mData, let toData = to.mData else { continue }
+            memcpy(toData, fromData, Int(min(from.mDataByteSize, to.mDataByteSize)))
+        }
+        return copy
+    }
+}
+
+/// Where a streaming session's audio comes from.
+enum StreamingSource: String {
+    /// The module captures the microphone itself.
+    case microphone
+    /// The app feeds audio through `feedStreamingAudio`.
+    case manual
+}
+
+/// One streaming session: audio from the microphone tap or `feedStreamingAudio` goes through
+/// `audio` in order, and `processing` hands it to the manager one buffer at a time.
+final class StreamingSession {
+    let manager: any StreamingAsrManager
+    let variant: StreamingModelVariant
+    let source: StreamingSource
+    let audio: AsyncStream<AVAudioPCMBuffer>.Continuation
+    let processing: Task<Void, Never>
+    var engine: AVAudioEngine?
+
+    init(
+        manager: any StreamingAsrManager,
+        variant: StreamingModelVariant,
+        source: StreamingSource,
+        audio: AsyncStream<AVAudioPCMBuffer>.Continuation,
+        processing: Task<Void, Never>
+    ) {
+        self.manager = manager
+        self.variant = variant
+        self.source = source
+        self.audio = audio
+        self.processing = processing
+    }
+
+    func stopMicrophone() {
+        guard let engine else { return }
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
+        self.engine = nil
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
 }
 
 @objc(FluidAudioModule)
@@ -66,11 +150,17 @@ class FluidAudioModule: RCTEventEmitter {
 
     private var hasListeners = false
 
-    // Streaming ASR
-    private var streamingManager: StreamingAsrManager?
-    private var audioEngine: AVAudioEngine?
-    private var streamingTask: Task<Void, Never>?
-    private var isStreamingActive = false
+    // Streaming ASR. `streamingLock` guards both properties: React Native calls
+    // module methods on its own queue while sessions start and stop in Tasks.
+    private let streamingLock = NSLock()
+    private var streamingSession: StreamingSession?
+    /// Set from `startStreamingAsr` until its session is ready, so a second start is refused.
+    private var streamingStarting = false
+    /// The last streaming manager used, kept loaded so the next session with the
+    /// same model starts without reloading it.
+    private var idleStreamingManager: (variant: StreamingModelVariant, manager: any StreamingAsrManager)?
+
+    static let defaultStreamingModel = StreamingModelVariant.parakeetEou320ms
 
     // ASR
     private var asrManager: AsrManager?
@@ -150,7 +240,7 @@ class FluidAudioModule: RCTEventEmitter {
                 ])
 
                 let startTime = Date()
-                let models = try await AsrModels.downloadAndLoad()
+                let models = try await AsrModels.downloadAndLoad(version: .v3)
                 self.asrModels = models
 
                 sendEvent(name: "onModelLoadProgress", body: [
@@ -159,9 +249,8 @@ class FluidAudioModule: RCTEventEmitter {
                     "progress": 50
                 ])
 
-                let asrConfig = ASRConfig(sampleRate: 16000, tdtConfig: TdtConfig())
-                let manager = AsrManager(config: asrConfig)
-                try await manager.initialize(models: models)
+                let manager = AsrManager(config: .default)
+                try await manager.loadModels(models)
                 self.asrManager = manager
 
                 let duration = Date().timeIntervalSince(startTime)
@@ -196,7 +285,8 @@ class FluidAudioModule: RCTEventEmitter {
         Task {
             do {
                 let url = URL(fileURLWithPath: filePath)
-                let result = try await asrManager.transcribe(url)
+                var decoderState = TdtDecoderState.make(decoderLayers: await asrManager.decoderLayerCount)
+                let result = try await asrManager.transcribe(url, decoderState: &decoderState)
 
                 resolve([
                     "text": result.text,
@@ -230,12 +320,9 @@ class FluidAudioModule: RCTEventEmitter {
 
         Task {
             do {
-                let samples = audioData.withUnsafeBytes { ptr -> [Float] in
-                    let int16Ptr = ptr.bindMemory(to: Int16.self)
-                    return int16Ptr.map { Float($0) / 32768.0 }
-                }
-
-                let result = try await asrManager.transcribe(samples)
+                let samples = AudioUtils.int16LEToFloat(audioData)
+                var decoderState = TdtDecoderState.make(decoderLayers: await asrManager.decoderLayerCount)
+                let result = try await asrManager.transcribe(samples, decoderState: &decoderState)
 
                 resolve([
                     "text": result.text,
@@ -260,128 +347,237 @@ class FluidAudioModule: RCTEventEmitter {
 
     // MARK: - Streaming ASR
 
+    private func withStreamingLock<T>(_ body: () throws -> T) rethrows -> T {
+        streamingLock.lock()
+        defer { streamingLock.unlock() }
+        return try body()
+    }
+
+    /// Reuse the idle manager for `variant`, or create and load a new one.
+    private func streamingManager(for variant: StreamingModelVariant) async throws -> any StreamingAsrManager {
+        let idle = withStreamingLock { () -> (variant: StreamingModelVariant, manager: any StreamingAsrManager)? in
+            defer { idleStreamingManager = nil }
+            return idleStreamingManager
+        }
+        if let idle {
+            if idle.variant == variant {
+                try await idle.manager.reset()
+                return idle.manager
+            }
+            await idle.manager.cleanup()
+        }
+
+        sendEvent(name: "onModelLoadProgress", body: [
+            "type": "streaming",
+            "status": "downloading",
+            "progress": 0
+        ])
+        let manager = variant.createManager()
+        try await manager.loadModels()
+        sendEvent(name: "onModelLoadProgress", body: [
+            "type": "streaming",
+            "status": "ready",
+            "progress": 100
+        ])
+        return manager
+    }
+
+    /// Start capturing the microphone into the session's audio queue.
+    private func startMicrophone(into audio: AsyncStream<AVAudioPCMBuffer>.Continuation) throws -> AVAudioEngine {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP])
+        try session.setActive(true)
+
+        let engine = AVAudioEngine()
+        let inputNode = engine.inputNode
+        let inputFormat = inputNode.outputFormat(forBus: 0)
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { buffer, _ in
+            // The streaming manager resamples to 16 kHz mono itself.
+            if let copy = AudioUtils.copy(buffer) {
+                audio.yield(copy)
+            }
+        }
+        do {
+            try engine.start()
+        } catch {
+            inputNode.removeTap(onBus: 0)
+            throw error
+        }
+        return engine
+    }
+
+    /// Start a streaming session.
+    ///
+    /// Config:
+    /// - `source`: `"microphone"` (default) captures the microphone; `"manual"` takes audio
+    ///   only from `feedStreamingAudio`.
+    /// - `model`: a `StreamingModelVariant` raw value; defaults to `"parakeet-eou-320ms"`.
     @objc(startStreamingAsr:resolver:rejecter:)
     func startStreamingAsr(
         config: NSDictionary?,
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
-        guard !isStreamingActive else {
+        let sourceName = config?["source"] as? String ?? StreamingSource.microphone.rawValue
+        guard let source = StreamingSource(rawValue: sourceName) else {
+            reject(
+                "STREAMING_SOURCE_UNSUPPORTED",
+                "Unsupported streaming source '\(sourceName)'. Use 'microphone' or 'manual'.", nil)
+            return
+        }
+        let modelName = config?["model"] as? String ?? Self.defaultStreamingModel.rawValue
+        guard let variant = StreamingModelVariant(rawValue: modelName) else {
+            let known = StreamingModelVariant.allCases.map(\.rawValue).joined(separator: ", ")
+            reject("STREAMING_MODEL_UNSUPPORTED", "Unknown streaming model '\(modelName)'. Use one of: \(known).", nil)
+            return
+        }
+
+        let alreadyActive = withStreamingLock { () -> Bool in
+            if streamingSession != nil || streamingStarting { return true }
+            streamingStarting = true
+            return false
+        }
+        guard !alreadyActive else {
             reject("STREAMING_ACTIVE", "Streaming is already active", nil)
             return
         }
 
-        Task {
+        Task { [weak self] in
+            guard let self else {
+                reject("STREAMING_START_ERROR", "The FluidAudio module was released", nil)
+                return
+            }
+            var loadedManager: (any StreamingAsrManager)?
+            var startedSession: StreamingSession?
             do {
-                // Request microphone permission
-                let session = AVAudioSession.sharedInstance()
-                try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetooth])
-                try session.setActive(true)
-
-                // Create streaming manager
-                let streamConfig = StreamingAsrConfig.streaming
-                let manager = StreamingAsrManager(config: streamConfig)
-                self.streamingManager = manager
-
-                // Start the streaming engine
-                try await manager.start(source: .microphone)
-
-                // Set up audio engine to capture microphone
-                let engine = AVAudioEngine()
-                self.audioEngine = engine
-
-                let inputNode = engine.inputNode
-                let inputFormat = inputNode.outputFormat(forBus: 0)
-
-                // Install tap to capture audio
-                inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
-                    guard let self = self, self.isStreamingActive else { return }
-                    Task {
-                        await self.streamingManager?.streamAudio(buffer)
-                    }
+                let manager = try await streamingManager(for: variant)
+                loadedManager = manager
+                await manager.setPartialTranscriptCallback { [weak self] text in
+                    // These models never revise emitted text, so the partial transcript is confirmed.
+                    self?.sendEvent(name: "onStreamingUpdate", body: [
+                        "volatile": "",
+                        "confirmed": text,
+                        "text": text,
+                        "isFinal": false
+                    ])
                 }
 
-                // Start audio engine
-                try engine.start()
-                self.isStreamingActive = true
-
-                // Listen for transcription updates
-                self.streamingTask = Task { [weak self] in
-                    guard let self = self, let manager = self.streamingManager else { return }
-
-                    for await update in await manager.transcriptionUpdates {
-                        let volatile = await manager.volatileTranscript
-                        let confirmed = await manager.confirmedTranscript
-
-                        self.sendEvent(name: "onStreamingUpdate", body: [
-                            "volatile": volatile,
-                            "confirmed": confirmed,
-                            "text": update.text,
-                            "isConfirmed": update.isConfirmed,
-                            "confidence": update.confidence,
-                            "isFinal": false
-                        ])
+                let (stream, audio) = AsyncStream<AVAudioPCMBuffer>.makeStream()
+                let processing = Task { [weak self] in
+                    for await buffer in stream {
+                        do {
+                            try await manager.appendAudio(buffer)
+                            try await manager.processBufferedAudio()
+                        } catch {
+                            self?.sendEvent(name: "onTranscriptionError", body: [
+                                "code": "STREAMING_PROCESS_ERROR",
+                                "message": error.localizedDescription
+                            ])
+                        }
                     }
                 }
+                let session = StreamingSession(
+                    manager: manager, variant: variant, source: source, audio: audio, processing: processing)
+                startedSession = session
 
-                resolve(["success": true])
+                if source == .microphone {
+                    session.engine = try startMicrophone(into: audio)
+                }
 
+                withStreamingLock {
+                    self.streamingSession = session
+                    self.streamingStarting = false
+                }
+                resolve(["success": true, "source": source.rawValue, "model": variant.rawValue])
             } catch {
-                self.isStreamingActive = false
+                if let startedSession {
+                    startedSession.stopMicrophone()
+                    startedSession.audio.finish()
+                }
+                if source == .microphone {
+                    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+                }
+                withStreamingLock {
+                    if let loadedManager { self.idleStreamingManager = (variant, loadedManager) }
+                    self.streamingStarting = false
+                }
                 reject("STREAMING_START_ERROR", "Failed to start streaming: \(error.localizedDescription)", error)
             }
         }
     }
 
+    /// Feed audio to a session started with `source: 'manual'`.
+    ///
+    /// `base64Audio` is little-endian 16-bit mono PCM at 16 kHz. The buffer is queued in order
+    /// behind any audio already fed; transcript updates arrive as `onStreamingUpdate` events.
     @objc(feedStreamingAudio:resolver:rejecter:)
     func feedStreamingAudio(
         base64Audio: String,
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
-        // This is handled automatically by the audio tap when using microphone source
-        // For manual feeding, we would need to convert base64 to AVAudioPCMBuffer
-        resolve(["success": true])
+        guard let session = withStreamingLock({ streamingSession }) else {
+            reject("STREAMING_NOT_ACTIVE", "Streaming not started. Call startStreamingAsr first.", nil)
+            return
+        }
+        guard session.source == .manual else {
+            reject(
+                "STREAMING_SOURCE_MICROPHONE",
+                "This session captures the microphone itself. Start streaming with source: 'manual' to feed audio.",
+                nil)
+            return
+        }
+        guard let audioData = Data(base64Encoded: base64Audio) else {
+            reject("INVALID_AUDIO", "Invalid base64 audio data", nil)
+            return
+        }
+        guard audioData.count % 2 == 0 else {
+            reject("INVALID_AUDIO", "Audio must be 16-bit PCM, but has an odd number of bytes", nil)
+            return
+        }
+        guard let buffer = AudioUtils.pcm16MonoBuffer(from: audioData, sampleRate: 16000) else {
+            reject("INVALID_AUDIO", "Audio data is empty", nil)
+            return
+        }
+
+        session.audio.yield(buffer)
+        resolve(["success": true, "samples": Int(buffer.frameLength)])
     }
 
+    /// Stop the session: transcribe all audio queued so far, then return the final text.
     @objc(stopStreamingAsr:rejecter:)
     func stopStreamingAsr(
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
-        guard isStreamingActive else {
+        guard let session = withStreamingLock({ () -> StreamingSession? in
+            defer { streamingSession = nil }
+            return streamingSession
+        }) else {
             resolve(["text": "", "success": true])
             return
         }
 
         Task {
+            session.stopMicrophone()
+            session.audio.finish()
+            await session.processing.value
+
             do {
-                // Stop audio engine
-                audioEngine?.inputNode.removeTap(onBus: 0)
-                audioEngine?.stop()
-                audioEngine = nil
-
-                // Get final transcription
-                let finalText = try await streamingManager?.finish() ?? ""
-
-                // Cancel update task
-                streamingTask?.cancel()
-                streamingTask = nil
-
-                // Clean up
-                streamingManager = nil
-                isStreamingActive = false
-
-                // Deactivate audio session
-                try? AVAudioSession.sharedInstance().setActive(false)
-
+                let finalText = try await session.manager.finish()
+                sendEvent(name: "onStreamingUpdate", body: [
+                    "volatile": "",
+                    "confirmed": finalText,
+                    "text": finalText,
+                    "isFinal": true
+                ])
+                withStreamingLock { idleStreamingManager = (session.variant, session.manager) }
                 resolve([
                     "text": finalText,
                     "success": true
                 ])
-
             } catch {
-                isStreamingActive = false
+                await session.manager.cleanup()
                 reject("STREAMING_STOP_ERROR", "Failed to stop streaming: \(error.localizedDescription)", error)
             }
         }
@@ -463,10 +659,7 @@ class FluidAudioModule: RCTEventEmitter {
 
         Task {
             do {
-                let samples = audioData.withUnsafeBytes { ptr -> [Float] in
-                    let int16Ptr = ptr.bindMemory(to: Int16.self)
-                    return int16Ptr.map { Float($0) / 32768.0 }
-                }
+                let samples = AudioUtils.int16LEToFloat(audioData)
 
                 let results = try await vadManager.process(samples)
 
@@ -621,10 +814,7 @@ class FluidAudioModule: RCTEventEmitter {
 
         Task {
             do {
-                let samples = audioData.withUnsafeBytes { ptr -> [Float] in
-                    let int16Ptr = ptr.bindMemory(to: Int16.self)
-                    return int16Ptr.map { Float($0) / 32768.0 }
-                }
+                let samples = AudioUtils.int16LEToFloat(audioData)
 
                 let result = try diarizerManager.performCompleteDiarization(samples, sampleRate: sampleRate)
 
@@ -722,20 +912,29 @@ class FluidAudioModule: RCTEventEmitter {
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
+        let (session, idle) = withStreamingLock {
+            () -> (StreamingSession?, (variant: StreamingModelVariant, manager: any StreamingAsrManager)?) in
+            defer {
+                streamingSession = nil
+                idleStreamingManager = nil
+            }
+            return (streamingSession, idleStreamingManager)
+        }
+
         Task {
-            // Stop streaming if active
-            if isStreamingActive {
-                audioEngine?.inputNode.removeTap(onBus: 0)
-                audioEngine?.stop()
-                audioEngine = nil
-                await streamingManager?.cancel()
-                streamingManager = nil
-                streamingTask?.cancel()
-                streamingTask = nil
-                isStreamingActive = false
+            // Stop streaming if active, discarding queued audio
+            if let session {
+                session.stopMicrophone()
+                session.audio.finish()
+                session.processing.cancel()
+                await session.manager.cleanup()
+            }
+            if let idle {
+                await idle.manager.cleanup()
             }
 
             // Clean up managers
+            await asrManager?.cleanup()
             asrManager = nil
             asrModels = nil
             vadManager = nil

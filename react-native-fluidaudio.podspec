@@ -18,8 +18,17 @@ Pod::Spec.new do |s|
   # React Native dependencies
   s.dependency "React-Core"
 
-  # FluidAudio dependency (fetched from GitHub)
-  s.dependency "FluidAudio", "~> 0.7"
+  # FluidAudio comes from GitHub through Swift Package Manager: CocoaPods trunk stops at
+  # FluidAudio 0.7.8 and goes read-only on December 2, 2026. `spm_dependency` is React
+  # Native's podspec helper (0.75+), defined once the Podfile loads react_native_pods.rb.
+  unless defined?(spm_dependency)
+    raise "react-native-fluidaudio needs React Native 0.75 or newer (for spm_dependency)."
+  end
+  spm_dependency(s,
+    url: "https://github.com/FluidInference/FluidAudio.git",
+    requirement: { kind: "upToNextMinorVersion", minimumVersion: "0.17.7" },
+    products: ["FluidAudio"]
+  )
 
   s.ios.frameworks = "CoreML", "AVFoundation", "Accelerate", "UIKit"
 

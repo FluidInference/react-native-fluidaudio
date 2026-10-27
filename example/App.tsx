@@ -14,6 +14,7 @@ import {
   View,
   ActivityIndicator,
   TextInput,
+  Image,
 } from 'react-native';
 
 import {
@@ -29,6 +30,45 @@ import {
   type ModelLoadProgressEvent,
   type StreamingUpdate,
 } from 'react-native-fluidaudio';
+
+/** The PCM data of a 16 kHz mono 16-bit WAV file. */
+function pcm16FromWav(wav: ArrayBuffer): ArrayBuffer {
+  const view = new DataView(wav);
+  const tag = (offset: number) =>
+    String.fromCharCode(
+      view.getUint8(offset),
+      view.getUint8(offset + 1),
+      view.getUint8(offset + 2),
+      view.getUint8(offset + 3)
+    );
+  if (view.byteLength < 12 || tag(0) !== 'RIFF' || tag(8) !== 'WAVE') {
+    throw new Error('Not a WAV file');
+  }
+  let formatOk = false;
+  let offset = 12;
+  while (offset + 8 <= view.byteLength) {
+    const id = tag(offset);
+    const size = view.getUint32(offset + 4, true);
+    const body = offset + 8;
+    if (id === 'fmt ') {
+      formatOk =
+        view.getUint16(body, true) === 1 && // PCM
+        view.getUint16(body + 2, true) === 1 && // mono
+        view.getUint32(body + 4, true) === 16000 &&
+        view.getUint16(body + 14, true) === 16;
+    } else if (id === 'data') {
+      if (!formatOk) {
+        throw new Error('Expected 16 kHz mono 16-bit PCM');
+      }
+      return wav.slice(body, body + size);
+    }
+    offset = body + size + (size % 2);
+  }
+  throw new Error('WAV file has no data chunk');
+}
+
+/** 320 ms of 16 kHz 16-bit audio per feedBuffer call. */
+const FEED_CHUNK_BYTES = 16000 * 2 * 0.32;
 
 const App = () => {
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
@@ -128,6 +168,36 @@ const App = () => {
       setLoading(false);
     }
   }, [streaming]);
+
+  // Stream the bundled sample (FluidAudio test fixture, 16.9 s) through feedBuffer,
+  // to check streaming transcription without a microphone.
+  const streamSampleFile = useCallback(async () => {
+    setLoading(true);
+    setResult('');
+    setStreamingText('');
+    setConfirmedText('');
+    try {
+      const asset = Image.resolveAssetSource(require('./assets/speech-16k-mono.wav'));
+      const response = await fetch(asset.uri);
+      const pcm = pcm16FromWav(await response.arrayBuffer());
+
+      await streaming.start({ source: 'manual' }, handleStreamingUpdate);
+      setIsStreaming(true);
+      for (let offset = 0; offset < pcm.byteLength; offset += FEED_CHUNK_BYTES) {
+        await streaming.feedBuffer(pcm.slice(offset, offset + FEED_CHUNK_BYTES));
+      }
+      const stopResult = await streaming.stop();
+      setResult(`File transcription:\n${stopResult.text || '(no speech detected)'}`);
+    } catch (error) {
+      if (streaming.isStreaming()) {
+        await streaming.stop().catch(() => undefined);
+      }
+      setResult(`Error: ${(error as Error).message}`);
+    } finally {
+      setIsStreaming(false);
+      setLoading(false);
+    }
+  }, [streaming, handleStreamingUpdate]);
 
   // ============================================================================
   // VAD Functions
@@ -247,15 +317,26 @@ const App = () => {
         {/* Streaming ASR Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Streaming Speech-to-Text</Text>
-          <Text style={styles.sectionDesc}>Real-time transcription from microphone</Text>
+          <Text style={styles.sectionDesc}>
+            Real-time transcription from the microphone, or from a bundled file fed in chunks
+          </Text>
           {!isStreaming ? (
-            <TouchableOpacity
-              style={[styles.button, styles.buttonPrimary, loading && styles.buttonDisabled]}
-              onPress={startStreaming}
-              disabled={loading}
-            >
-              <Text style={styles.buttonText}>🎤 Start Streaming</Text>
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity
+                style={[styles.button, styles.buttonPrimary, loading && styles.buttonDisabled]}
+                onPress={startStreaming}
+                disabled={loading}
+              >
+                <Text style={styles.buttonText}>🎤 Start Streaming</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, styles.buttonPrimary, loading && styles.buttonDisabled]}
+                onPress={streamSampleFile}
+                disabled={loading}
+              >
+                <Text style={styles.buttonText}>📄 Stream Sample File</Text>
+              </TouchableOpacity>
+            </>
           ) : (
             <TouchableOpacity
               style={[styles.button, styles.buttonDanger]}
