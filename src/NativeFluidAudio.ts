@@ -30,11 +30,18 @@ export interface Spec extends TurboModule {
   isAsrAvailable(): Promise<boolean>;
 
   // Streaming ASR
-  startStreamingAsr(config: Object | null): Promise<void>;
-  feedStreamingAudio(base64Audio: string): Promise<void>;
+  startStreamingAsr(config: Object | null): Promise<{
+    success: boolean;
+    source: string;
+    model: string;
+  }>;
+  feedStreamingAudio(base64Audio: string): Promise<{
+    success: boolean;
+    samples: number;
+  }>;
   stopStreamingAsr(): Promise<{
-    finalText: string;
-    totalDuration: number;
+    text: string;
+    success: boolean;
   }>;
 
   // VAD

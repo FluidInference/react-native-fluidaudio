@@ -115,10 +115,18 @@ describe('FluidAudio', () => {
     });
 
     it('should feed audio while streaming', async () => {
-      await streaming.start();
+      await streaming.start({ source: 'manual' });
       await streaming.feedAudio('base64chunk');
 
       expect(mockModule.feedStreamingAudio).toHaveBeenCalledWith('base64chunk');
+    });
+
+    it('should feed an ArrayBuffer as base64', async () => {
+      await streaming.start({ source: 'manual' });
+      // Two 16-bit samples: 1 and -1, little-endian.
+      await streaming.feedBuffer(new Uint8Array([0x01, 0x00, 0xff, 0xff]).buffer);
+
+      expect(mockModule.feedStreamingAudio).toHaveBeenCalledWith('AQD//w==');
     });
 
     it('should throw when feeding audio without starting', async () => {
