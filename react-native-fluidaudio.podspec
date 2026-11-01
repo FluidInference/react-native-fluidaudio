@@ -26,7 +26,7 @@ Pod::Spec.new do |s|
   end
   spm_dependency(s,
     url: "https://github.com/FluidInference/FluidAudio.git",
-    requirement: { kind: "upToNextMinorVersion", minimumVersion: "0.17.7" },
+    requirement: { kind: "upToNextMinorVersion", minimumVersion: "0.18.0" },
     products: ["FluidAudio"]
   )
 

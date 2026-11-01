@@ -22,7 +22,7 @@ React Native wrapper for [FluidAudio](https://github.com/FluidInference/FluidAud
 - iOS 17.0+
 - React Native 0.75+ or Expo SDK 52+
 
-FluidAudio (0.17.7 and later 0.17.x releases) is pulled from GitHub through Swift Package Manager with React Native's `spm_dependency` podspec helper, which needs React Native 0.75. CocoaPods trunk only has FluidAudio 0.7.8 and goes read-only on December 2, 2026.
+FluidAudio (0.18.0 and later 0.18.x releases) is pulled from GitHub through Swift Package Manager with React Native's `spm_dependency` podspec helper, which needs React Native 0.75. CocoaPods trunk only has FluidAudio 0.7.8 and goes read-only on December 2, 2026.
 
 ## Installation
 
